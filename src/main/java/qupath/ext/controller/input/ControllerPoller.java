@@ -1,0 +1,400 @@
+package qupath.ext.controller.input;
+
+import javafx.animation.AnimationTimer;
+import javafx.application.Platform;
+import javafx.beans.property.BooleanProperty;
+import javafx.beans.property.SimpleBooleanProperty;
+import javafx.beans.property.SimpleStringProperty;
+import javafx.beans.property.StringProperty;
+import javafx.collections.FXCollections;
+import javafx.collections.ObservableList;
+import org.hid4java.HidDevice;
+import org.hid4java.HidManager;
+import org.hid4java.HidServices;
+import org.hid4java.HidServicesSpecification;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import qupath.ext.controller.mapping.ControllerMapping;
+import qupath.ext.controller.mapping.MappingStore;
+
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.TimeUnit;
+
+public class ControllerPoller {
+
+    private static final Logger logger = LoggerFactory.getLogger(ControllerPoller.class);
+    private static final float BUTTON_THRESHOLD = 0.5f;
+    private static final long CONTINUOUS_INTERVAL_NANOS = TimeUnit.MILLISECONDS.toNanos(16);
+    private static final long TRIGGER_REPEAT_INTERVAL_NANOS = TimeUnit.MILLISECONDS.toNanos(300);
+    private static final long UNDO_HOLD_NANOS = TimeUnit.SECONDS.toNanos(1);
+    private static final long UNDO_RUMBLE_DELAY_NANOS = TimeUnit.MILLISECONDS.toNanos(400);
+
+    private final List<HidControllerDriver> drivers = List.of(new DualSenseDriver());
+    private final MappingStore mappingStore;
+    private final InputActionExecutor executor;
+    private final ObservableList<ControllerInput> inputs = FXCollections.observableArrayList();
+    private volatile boolean runningVolatile = true;
+    private final BooleanProperty running = new SimpleBooleanProperty(true);
+    private final StringProperty deviceName = new SimpleStringProperty("No controller detected");
+    private final Map<String, Float> lastValues = new HashMap<>();
+    private final Map<String, Long> lastContinuousNanos = new HashMap<>();
+    private final Map<String, Long> holdStartNanos = new HashMap<>();
+    private final Set<String> holdFired = new HashSet<>();
+    private final Set<String> rumbleFired = new HashSet<>();
+    private final Object deviceLock = new Object();
+    private volatile boolean inputFrozen;
+    private volatile boolean finePanMode;
+    private volatile boolean undoAvailable = true;
+
+    private volatile HidServices hidServices;
+    private volatile HidDevice activeDevice;
+    private volatile HidControllerDriver activeDriver;
+
+    public ControllerPoller(MappingStore mappingStore, InputActionExecutor executor) {
+        this.mappingStore = mappingStore;
+        this.executor = executor;
+        running.addListener((obs, oldVal, newVal) -> runningVolatile = newVal);
+    }
+
+    public void start() {
+        refreshControllers();
+        new AnimationTimer() {
+            @Override
+            public void handle(long now) {
+                pollSafely();
+            }
+        }.start();
+    }
+
+    public void refreshControllers() {
+        try {
+            var services = getHidServices();
+            services.scan();
+
+            HidDevice selected = null;
+            HidControllerDriver selectedDriver = null;
+            int total = 0;
+
+            for (var device : services.getAttachedHidDevices()) {
+                total++;
+                for (var driver : drivers) {
+                    if (driver.matches(device)) {
+                        if (selected == null || driver.isPreferred(device)) {
+                            selected = device;
+                            selectedDriver = driver;
+                        }
+                        break;
+                    }
+                }
+            }
+
+            activateDevice(selected, selectedDriver);
+            updateInputs(selected, selectedDriver);
+
+            var name = selected == null ? "No controller detected" : selected.getProduct();
+            Platform.runLater(() -> deviceName.set(name));
+            logger.info("HID refresh found {} device(s); active device is {}",
+                    total, selected == null ? "none" : selected.getProduct());
+        } catch (Throwable t) {
+            activateDevice(null, null);
+            updateInputs(null, null);
+            logger.warn("Unable to refresh HID controllers", t);
+        }
+    }
+
+    private synchronized HidServices getHidServices() {
+        var services = hidServices;
+        if (services != null)
+            return services;
+
+        var specification = new HidServicesSpecification();
+        specification.setAutoStart(false);
+        specification.setAutoShutdown(true);
+        specification.setAutoDataRead(false);
+        services = HidManager.getHidServices(specification);
+        services.start();
+        hidServices = services;
+        return services;
+    }
+
+    private void activateDevice(HidDevice selected, HidControllerDriver driver) {
+        synchronized (deviceLock) {
+            var current = activeDevice;
+            if (current != null && current != selected)
+                current.close();
+
+            if (activeDriver != null)
+                activeDriver.reset();
+
+            activeDevice = selected;
+            activeDriver = driver;
+            lastValues.clear();
+            lastContinuousNanos.clear();
+            inputFrozen = false;
+            finePanMode = false;
+
+            if (selected == null) {
+                executor.releaseAllHeldKeys();
+            }
+
+            if (selected != null && !selected.isOpen()) {
+                var opened = selected.open();
+                selected.setNonBlocking(true);
+                logger.info("Opening HID device {} returned {} ({})",
+                        selected.getProduct(), opened, selected.getLastErrorMessage());
+                if (!opened)
+                    activeDevice = null;
+            }
+        }
+    }
+
+    private void updateInputs(HidDevice device, HidControllerDriver driver) {
+        var discovered = FXCollections.<ControllerInput>observableArrayList();
+        if (device != null && driver != null)
+            discovered.addAll(driver.inputs());
+        Platform.runLater(() -> {
+            inputs.setAll(discovered);
+            for (var input : discovered)
+                mappingStore.ensureInput(input.id(), input.displayName());
+        });
+    }
+
+    private void pollSafely() {
+        try {
+            if (!runningVolatile)
+                return;
+            poll();
+        } catch (Exception e) {
+            logger.warn("Error while polling HID controller", e);
+        }
+    }
+
+    private void poll() {
+        var device = activeDevice;
+        var driver = activeDriver;
+        if (device == null || driver == null)
+            return;
+
+        var buffer = new byte[128];
+        int bytesRead;
+        synchronized (deviceLock) {
+            bytesRead = device.read(buffer, 1);
+        }
+        if (bytesRead < 10)
+            return;
+
+        var values = driver.parseReport(buffer, bytesRead);
+        if (values.isEmpty())
+            return;
+
+        double pointerX = 0, pointerY = 0; var hasPointer = false;
+        double panX = 0, panY = 0;         var hasPan = false;
+        double touchPanX = 0, touchPanY = 0; var hasTouchPan = false;
+
+        for (var entry : values.entrySet()) {
+            var inputId = entry.getKey();
+            var value = entry.getValue();
+            var mapping = mappingStore.getMapping(inputId);
+            if (mapping == null || mapping.actionType() == ControllerMapping.ActionType.NONE)
+                mapping = driver.builtInMapping(inputId);
+            if (mapping == null || mapping.actionType() == ControllerMapping.ActionType.NONE)
+                continue;
+
+            var lastValue = lastValues.getOrDefault(inputId, 0f);
+            lastValues.put(inputId, value);
+
+            if (mapping.actionType() == ControllerMapping.ActionType.CONTROLLER_TOGGLE_INPUT) {
+                handleFreezeToggle(inputId, value, lastValue);
+                continue;
+            }
+            if (inputFrozen)
+                continue;
+
+            if (mapping.actionType() == ControllerMapping.ActionType.CONTROLLER_TOGGLE_PAN_SPEED) {
+                handleFinePanToggle(inputId, value, lastValue);
+                continue;
+            }
+
+            var type = mapping.actionType();
+            var touchpadSwipe = driver.isTouchpadSwipe(inputId);
+
+            if (type == ControllerMapping.ActionType.MOUSE_MOVE_X)      { pointerX += value; hasPointer = true; }
+            else if (type == ControllerMapping.ActionType.MOUSE_MOVE_Y) { pointerY += value; hasPointer = true; }
+            else if (type == ControllerMapping.ActionType.QUPATH_PAN_X && touchpadSwipe) { touchPanX += value; hasTouchPan = true; }
+            else if (type == ControllerMapping.ActionType.QUPATH_PAN_Y && touchpadSwipe) { touchPanY += value; hasTouchPan = true; }
+            else if (type == ControllerMapping.ActionType.QUPATH_PAN_X) { panX += value; hasPan = true; }
+            else if (type == ControllerMapping.ActionType.QUPATH_PAN_Y) { panY += value; hasPan = true; }
+            else if (isAnalog(inputId)) handleAnalog(mapping, value);
+            else                        handleButton(inputId, mapping, value, lastValue, driver);
+        }
+
+        var panScale = finePanMode ? 0.2 : 1.0;
+        if (hasPointer)   executor.movePointer(pointerX, pointerY);
+        if (hasPan)       executor.panViewer(panX * panScale, panY * panScale);
+        if (hasTouchPan)  executor.panTouchpad(touchPanX * panScale, touchPanY * panScale);
+    }
+
+    private boolean isAnalog(String inputId) {
+        return inputId.endsWith("_x") || inputId.endsWith("_y") || inputId.endsWith("_axis");
+    }
+
+    private void handleAnalog(ControllerMapping mapping, float value) {
+        if (Math.abs(value) < 0.001f)
+            return;
+        executor.execute(mapping, value);
+    }
+
+    private void handleButton(String inputId, ControllerMapping mapping,
+                               float value, float lastValue, HidControllerDriver driver) {
+        var pressed = value >= BUTTON_THRESHOLD;
+        var wasPressed = lastValue >= BUTTON_THRESHOLD;
+
+        if (mapping.actionType() == ControllerMapping.ActionType.QUPATH_UNDO) {
+            handleDelayedUndo(inputId, mapping, pressed);
+            return;
+        }
+
+        if (driver.isTriggerRepeat(inputId) && isTriggerRepeatAction(mapping)) {
+            handleRepeatingButton(inputId, mapping, pressed, wasPressed, TRIGGER_REPEAT_INTERVAL_NANOS);
+            return;
+        }
+
+        if (isContinuous(mapping)) {
+            if (pressed && shouldFireContinuous(inputId))
+                executor.execute(mapping, 1f);
+            return;
+        }
+
+        if (pressed && !wasPressed) {
+            executor.execute(mapping, 1f);
+        } else if (!pressed && wasPressed) {
+            executor.release(mapping);
+        }
+    }
+
+    private void handleRepeatingButton(String inputId, ControllerMapping mapping,
+                                        boolean pressed, boolean wasPressed, long interval) {
+        if (!pressed) {
+            lastContinuousNanos.remove(inputId);
+            if (wasPressed) executor.release(mapping);
+            return;
+        }
+        var now = System.nanoTime();
+        if (!wasPressed) {
+            lastContinuousNanos.put(inputId, now);
+            executor.execute(mapping, 1f);
+        } else if (shouldFireContinuous(inputId, interval)) {
+            executor.execute(mapping, 1f);
+        }
+    }
+
+    private void handleDelayedUndo(String inputId, ControllerMapping mapping, boolean pressed) {
+        if (!pressed) {
+            if (holdStartNanos.containsKey(inputId) && !holdFired.contains(inputId)) {
+                executor.execute(new ControllerMapping(inputId, mapping.inputName(),
+                        ControllerMapping.ActionType.QUPATH_CLOSE_DIALOG, ""), 1f);
+            }
+            holdStartNanos.remove(inputId);
+            holdFired.remove(inputId);
+            if (rumbleFired.remove(inputId)) setRumble(0, 0);
+            return;
+        }
+
+        var now = System.nanoTime();
+        var start = holdStartNanos.computeIfAbsent(inputId, ignored -> now);
+        var elapsed = now - start;
+
+        if (elapsed >= UNDO_RUMBLE_DELAY_NANOS && !rumbleFired.contains(inputId) && undoAvailable) {
+            rumbleFired.add(inputId);
+            setRumble(0, 20);
+        }
+        if (!holdFired.contains(inputId) && elapsed >= UNDO_HOLD_NANOS) {
+            holdFired.add(inputId);
+            setRumble(0, 0);
+            executor.execute(mapping, 1f);
+        }
+    }
+
+    private void handleFreezeToggle(String inputId, float value, float lastValue) {
+        if (value < BUTTON_THRESHOLD || lastValue >= BUTTON_THRESHOLD) return;
+        inputFrozen = !inputFrozen;
+        if (inputFrozen) {
+            executor.releaseAllHeldKeys();
+            finePanMode = false;
+            setMicMuteLed(false);
+        }
+        lastContinuousNanos.clear();
+        logger.info("Controller input {}", inputFrozen ? "frozen" : "active");
+    }
+
+    private void handleFinePanToggle(String inputId, float value, float lastValue) {
+        if (value < BUTTON_THRESHOLD || lastValue >= BUTTON_THRESHOLD) return;
+        finePanMode = !finePanMode;
+        setMicMuteLed(finePanMode);
+        logger.info("Fine pan mode {}", finePanMode ? "enabled" : "disabled");
+    }
+
+    private boolean isContinuous(ControllerMapping mapping) {
+        return mapping.actionType() == ControllerMapping.ActionType.MOUSE_WHEEL
+                || mapping.actionType() == ControllerMapping.ActionType.QUPATH_ZOOM_IN
+                || mapping.actionType() == ControllerMapping.ActionType.QUPATH_ZOOM_OUT;
+    }
+
+    private boolean isTriggerRepeatAction(ControllerMapping mapping) {
+        return mapping.actionType() == ControllerMapping.ActionType.KEY
+                || mapping.actionType() == ControllerMapping.ActionType.QUPATH_TOOL_NEXT
+                || mapping.actionType() == ControllerMapping.ActionType.QUPATH_TOOL_PREVIOUS;
+    }
+
+    private boolean shouldFireContinuous(String inputId) {
+        return shouldFireContinuous(inputId, CONTINUOUS_INTERVAL_NANOS);
+    }
+
+    private boolean shouldFireContinuous(String inputId, long intervalNanos) {
+        var now = System.nanoTime();
+        var previous = lastContinuousNanos.getOrDefault(inputId, 0L);
+        if (now - previous < intervalNanos) return false;
+        lastContinuousNanos.put(inputId, now);
+        return true;
+    }
+
+    // ── Public API ────────────────────────────────────────────────────────────
+
+    public ObservableList<ControllerInput> inputs() { return inputs; }
+    public StringProperty deviceNameProperty()      { return deviceName; }
+    public MappingStore mappingStore()               { return mappingStore; }
+    public BooleanProperty runningProperty()         { return running; }
+    public void setUndoAvailable(boolean available)  { this.undoAvailable = available; }
+
+    public boolean setLightbarColor(int r, int g, int b) {
+        synchronized (deviceLock) {
+            var d = activeDriver; var dev = activeDevice;
+            return d != null && d.setLightbarColor(dev, r, g, b);
+        }
+    }
+
+    public boolean setMicMuteLed(boolean muted) {
+        synchronized (deviceLock) {
+            var d = activeDriver; var dev = activeDevice;
+            return d != null && d.setMicMuteLed(dev, muted);
+        }
+    }
+
+    public boolean setRumble(int left, int right) {
+        synchronized (deviceLock) {
+            var d = activeDriver; var dev = activeDevice;
+            return d != null && d.setRumble(dev, left, right);
+        }
+    }
+
+    public boolean setPlayerLeds(int player) {
+        synchronized (deviceLock) {
+            var d = activeDriver; var dev = activeDevice;
+            return d != null && d.setPlayerLeds(dev, player);
+        }
+    }
+}

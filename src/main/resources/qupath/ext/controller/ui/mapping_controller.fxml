@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<fx:root type="TabPane" tabClosingPolicy="UNAVAILABLE"
+         xmlns="http://javafx.com/javafx"
+         xmlns:fx="http://javafx.com/fxml">
+    <padding><Insets top="8" right="8" bottom="8" left="8"/></padding>
+
+    <!-- Layout tab -->
+    <Tab text="Layout">
+        <content>
+            <BorderPane>
+                <top>
+                    <HBox spacing="8" alignment="CENTER_LEFT">
+                        <padding><Insets bottom="8"/></padding>
+                        <Label fx:id="deviceLabel" style="-fx-opacity: 0.72;"/>
+                        <Button fx:id="refreshButton" text="Refresh" onAction="#onRefresh">
+                            <tooltip><Tooltip text="Scan for connected controllers"/></tooltip>
+                        </Button>
+                        <Button fx:id="resetButton" text="Reset" onAction="#onReset"/>
+                    </HBox>
+                </top>
+                <center>
+                    <TableView fx:id="table">
+                        <BorderPane.margin><Insets top="8"/></BorderPane.margin>
+                        <columns>
+                            <TableColumn fx:id="inputColumn" text="Controller input"/>
+                            <TableColumn fx:id="actionColumn" text="Action"/>
+                            <TableColumn fx:id="valueColumn" text="Value"/>
+                        </columns>
+                    </TableView>
+                </center>
+            </BorderPane>
+        </content>
+    </Tab>
+
+    <!-- Profiles tab -->
+    <Tab text="Profiles">
+        <content>
+            <VBox spacing="12">
+                <padding><Insets top="12" right="12" bottom="12" left="12"/></padding>
+                <HBox VBox.vgrow="ALWAYS">
+                    <VBox maxWidth="220.0" prefWidth="220.0" VBox.vgrow="ALWAYS">
+                        <ListView fx:id="profileList" prefWidth="220.0" maxWidth="220.0" VBox.vgrow="ALWAYS"/>
+                        <HBox>
+                            <Button fx:id="loadButton" text="Load" maxWidth="Infinity"
+                                    disable="true" onAction="#onLoad" HBox.hgrow="ALWAYS"/>
+                            <Button fx:id="deleteButton" text="Delete" maxWidth="Infinity"
+                                    disable="true" onAction="#onDelete" HBox.hgrow="ALWAYS"/>
+                        </HBox>
+                    </VBox>
+                </HBox>
+                <VBox spacing="6">
+                    <Label text="Save current layout as:"/>
+                    <HBox spacing="8" alignment="CENTER_LEFT">
+                        <TextField fx:id="profileNameField" promptText="Profile name" HBox.hgrow="ALWAYS"/>
+                        <Button fx:id="saveProfileButton" text="Save" disable="true" onAction="#onSaveProfile"/>
+                    </HBox>
+                </VBox>
+            </VBox>
+        </content>
+    </Tab>
+
+    <!-- Advanced tab -->
+    <Tab text="Advanced">
+        <content>
+            <VBox spacing="12">
+                <padding><Insets top="16" right="16" bottom="16" left="16"/></padding>
+                <HBox spacing="6">
+                    <Label text="Pointer sensitivity" prefWidth="150.0">
+                        <tooltip><Tooltip text="Speed of cursor movement driven by a stick or axis"/></tooltip>
+                    </Label>
+                    <Slider fx:id="pointerSlider" min="4" max="56" blockIncrement="2" prefWidth="150.0"/>
+                    <Label fx:id="pointerValueLabel" prefWidth="24.0"/>
+                </HBox>
+                <HBox spacing="6">
+                    <Label text="Pan sensitivity" prefWidth="150.0">
+                        <tooltip><Tooltip text="Speed of panning driven by a stick or axis"/></tooltip>
+                    </Label>
+                    <Slider fx:id="panSlider" min="1" max="15" blockIncrement="2" prefWidth="150.0"/>
+                    <Label fx:id="panValueLabel" prefWidth="24.0"/>
+                </HBox>
+                <HBox spacing="6">
+                    <Label text="Touch pad sensitivity" prefWidth="150.0">
+                        <tooltip><Tooltip text="Speed of panning driven by a touch pad swipe"/></tooltip>
+                    </Label>
+                    <Slider fx:id="touchpadSlider" min="1" max="15" blockIncrement="2" prefWidth="150.0"/>
+                    <Label fx:id="touchpadValueLabel" prefWidth="24.0"/>
+                </HBox>
+                <HBox spacing="6">
+                    <Label text="Zoom sensitivity" prefWidth="150.0">
+                        <tooltip><Tooltip text="Speed of zooming driven by a button"/></tooltip>
+                    </Label>
+                    <Slider fx:id="zoomSlider" min="1" max="35" blockIncrement="2" prefWidth="150.0"/>
+                    <Label fx:id="zoomValueLabel" prefWidth="24.0"/>
+                </HBox>
+                <Button fx:id="resetSensitivityButton" text="Reset" onAction="#onResetSensitivity"/>
+            </VBox>
+        </content>
+    </Tab>
+</fx:root>
