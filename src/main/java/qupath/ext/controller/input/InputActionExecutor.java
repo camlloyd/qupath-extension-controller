@@ -5,6 +5,7 @@ import javafx.beans.property.DoubleProperty;
 import javafx.scene.input.KeyCode;
 import javafx.stage.Stage;
 import javafx.stage.Window;
+import javafx.stage.WindowEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.controller.mapping.ControllerMapping;
@@ -329,7 +330,7 @@ public class InputActionExecutor {
                     candidate = stage;
             }
             if (candidate != null)
-                candidate.close();
+                candidate.fireEvent(new WindowEvent(candidate, WindowEvent.WINDOW_CLOSE_REQUEST));
         });
     }
 
