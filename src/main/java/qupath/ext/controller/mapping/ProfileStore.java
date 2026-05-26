@@ -68,13 +68,15 @@ public class ProfileStore {
     }
 
     public void delete(String name) {
-        if (!isValidName(name)) {
+        if (!isValidName(name) || "Default".equals(name)) {
             logger.warn("Refusing to delete profile with invalid name '{}'", name);
             return;
         }
         var profiles = new ArrayList<>(readAll());
         profiles.removeIf(p -> p.name().equals(name));
         writeAll(profiles);
+        if (name.equals(getActiveProfileName()))
+            setActiveProfileName("Default");
     }
 
     private static List<ControllerProfile> readAll() {
