@@ -111,6 +111,7 @@ public class MappingController extends TabPane {
         var def = poller.mappingStore().toProfile("Default");
         profileStore.save(def);
         onProfileLoad.accept(def);
+        profileList.refresh();
     }
 
     // ── Profiles tab wiring ───────────────────────────────────────────────────
@@ -132,6 +133,8 @@ public class MappingController extends TabPane {
                 if (empty || name == null) { setGraphic(null); return; }
                 nameLabel.setText(name);
                 playerLabel.setText((lv.getItems().indexOf(name) + 1) + ".");
+                var active = name.equals(profileStore.getActiveProfileName());
+                nameLabel.setStyle(active ? "-fx-font-weight: bold;" : "");
                 setGraphic(cell);
             }
         });
@@ -159,7 +162,10 @@ public class MappingController extends TabPane {
         var name = profileList.getSelectionModel().getSelectedItem();
         if (name == null) return;
         var profile = profileStore.load(name);
-        if (profile != null) onProfileLoad.accept(profile);
+        if (profile != null) {
+            onProfileLoad.accept(profile);
+            profileList.refresh();
+        }
     }
 
     @FXML
@@ -174,6 +180,7 @@ public class MappingController extends TabPane {
                 var fallback = profileStore.load("Default");
                 if (fallback != null) onProfileLoad.accept(fallback);
             }
+            profileList.refresh();
         }
     }
 
