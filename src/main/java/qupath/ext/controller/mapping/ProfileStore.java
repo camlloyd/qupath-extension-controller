@@ -15,12 +15,17 @@ public class ProfileStore {
 
     private static final Logger logger = LoggerFactory.getLogger(ProfileStore.class);
     private static final ObjectMapper mapper = new ObjectMapper();
-    private static final TypeReference<List<ControllerProfile>> PROFILE_LIST_TYPE = new TypeReference<>() {};
+    private static final TypeReference<List<String>> STRING_LIST_TYPE = new TypeReference<>() {};
 
-    private static final StringProperty profilesPref =
-            PathPrefs.createPersistentPreference("controller.profiles", "[]");
     private static final StringProperty activeProfilePref =
             PathPrefs.createPersistentPreference("controller.activeProfile", null);
+    private static final StringProperty profileNamesPref =
+            PathPrefs.createPersistentPreference("controller.profileNames", "[]");
+    private static final List<StringProperty> profileSlots = List.of(
+            PathPrefs.createPersistentPreference("controller.profile.0", null),
+            PathPrefs.createPersistentPreference("controller.profile.1", null),
+            PathPrefs.createPersistentPreference("controller.profile.2", null),
+            PathPrefs.createPersistentPreference("controller.profile.3", null));
 
     public String getActiveProfileName() {
         return activeProfilePref.get();
@@ -81,16 +86,31 @@ public class ProfileStore {
 
     private static List<ControllerProfile> readAll() {
         try {
-            return mapper.readValue(profilesPref.get(), PROFILE_LIST_TYPE);
+            var names = mapper.readValue(profileNamesPref.get(), STRING_LIST_TYPE);
+            var result = new ArrayList<ControllerProfile>();
+            for (int i = 0; i < names.size() && i < profileSlots.size(); i++) {
+                var json = profileSlots.get(i).get();
+                if (json != null) {
+                    try {
+                        result.add(mapper.readValue(json, ControllerProfile.class));
+                    } catch (Exception e) {
+                        logger.warn("Cannot parse stored profile '{}', skipping", names.get(i));
+                    }
+                }
+            }
+            return result;
         } catch (Exception e) {
-            logger.debug("Cannot read profiles from preferences, treating as empty", e);
+            logger.debug("Cannot read profiles, treating as empty", e);
             return List.of();
         }
     }
 
     private static void writeAll(List<ControllerProfile> profiles) {
         try {
-            profilesPref.set(mapper.writeValueAsString(profiles));
+            for (int i = 0; i < profileSlots.size(); i++)
+                profileSlots.get(i).set(i < profiles.size() ? mapper.writeValueAsString(profiles.get(i)) : null);
+            profileNamesPref.set(mapper.writeValueAsString(
+                    profiles.stream().map(ControllerProfile::name).toList()));
         } catch (Exception e) {
             logger.error("Failed to save profiles", e);
         }
