@@ -221,7 +221,30 @@ public class MappingStore {
                 "dualsense.right_x|Right joystick horizontal|QUPATH_PAN_X|",
                 "dualsense.right_y|Right joystick vertical|QUPATH_PAN_Y|",
                 "dualsense.touchpad_swipe_x|Touch pad swipe horizontal|QUPATH_PAN_X|",
-                "dualsense.touchpad_swipe_y|Touch pad swipe vertical|QUPATH_PAN_Y|");
+                "dualsense.touchpad_swipe_y|Touch pad swipe vertical|QUPATH_PAN_Y|",
+                "xbox360.a|A button|MOUSE_BUTTON|Left",
+                "xbox360.b|B button|QUPATH_UNDO|",
+                "xbox360.x|X button|MOUSE_BUTTON|Right",
+                "xbox360.y|Y button|MOUSE_SHIFT_RIGHT_CLICK|",
+                "xbox360.lb|Left bumper (LB)|QUPATH_TOOL_PREVIOUS|",
+                "xbox360.rb|Right bumper (RB)|QUPATH_TOOL_NEXT|",
+                "xbox360.lt|Left trigger (LT)|QUPATH_ZOOM_OUT|",
+                "xbox360.rt|Right trigger (RT)|QUPATH_ZOOM_IN|",
+                "xbox360.lt_axis|LT trigger analog|NONE|",
+                "xbox360.rt_axis|RT trigger analog|NONE|",
+                "xbox360.back|Back button|QUPATH_COMMAND|File > Export snapshot... > Main window screenshot...",
+                "xbox360.start|Start button|QUPATH_COMMAND|File > Save As...",
+                "xbox360.guide|Guide button|CONTROLLER_TOGGLE_INPUT|",
+                "xbox360.ls|Left stick click (LS)|QUPATH_COMMAND|View > Zoom > Zoom to fit",
+                "xbox360.rs|Right stick click (RS)|CONTROLLER_TOGGLE_PAN_SPEED|",
+                "xbox360.dpad_up|D-pad up|QUPATH_SHOW_ANNOTATIONS|",
+                "xbox360.dpad_down|D-pad down|QUPATH_FILL_ANNOTATIONS|",
+                "xbox360.dpad_left|D-pad left|QUPATH_SHOW_DETECTIONS|",
+                "xbox360.dpad_right|D-pad right|QUPATH_FILL_DETECTIONS|",
+                "xbox360.left_x|Left joystick horizontal|MOUSE_MOVE_X|",
+                "xbox360.left_y|Left joystick vertical|MOUSE_MOVE_Y|",
+                "xbox360.right_x|Right joystick horizontal|QUPATH_PAN_X|",
+                "xbox360.right_y|Right joystick vertical|QUPATH_PAN_Y|");
     }
 
     private static ControllerMapping migrateDefaultMapping(ControllerMapping mapping) {

@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class ControllerPoller {
 
@@ -33,7 +34,7 @@ public class ControllerPoller {
     private static final long UNDO_HOLD_NANOS = TimeUnit.SECONDS.toNanos(1);
     private static final long UNDO_RUMBLE_DELAY_NANOS = TimeUnit.MILLISECONDS.toNanos(400);
 
-    private final List<HidControllerDriver> drivers = List.of(new DualSenseDriver());
+    private final List<HidControllerDriver> drivers = List.of(new DualSenseDriver(), new Xbox360Driver());
     private final MappingStore mappingStore;
     private final InputActionExecutor executor;
     private final ObservableList<ControllerInput> inputs = FXCollections.observableArrayList();
@@ -49,6 +50,8 @@ public class ControllerPoller {
     private volatile boolean inputFrozen;
     private volatile boolean finePanMode;
     private volatile boolean undoAvailable = true;
+    private volatile Map<String, Float> cachedValues = Map.of();
+    private final AtomicBoolean newDataPending = new AtomicBoolean();
 
     private volatile HidServices hidServices;
     private volatile HidDevice activeDevice;
@@ -122,6 +125,7 @@ public class ControllerPoller {
     }
 
     private void activateDevice(HidDevice selected, HidControllerDriver driver) {
+        HidDevice deviceToStart = null;
         synchronized (deviceLock) {
             var current = activeDevice;
             if (current != null && current != selected)
@@ -134,6 +138,8 @@ public class ControllerPoller {
             activeDriver = driver;
             lastValues.clear();
             lastContinuousNanos.clear();
+            cachedValues = Map.of();
+            newDataPending.set(false);
             inputFrozen = false;
             finePanMode = false;
 
@@ -143,13 +149,41 @@ public class ControllerPoller {
 
             if (selected != null && !selected.isOpen()) {
                 var opened = selected.open();
-                selected.setNonBlocking(true);
                 logger.info("Opening HID device {} returned {} ({})",
                         selected.getProduct(), opened, selected.getLastErrorMessage());
-                if (!opened)
+                if (opened)
+                    deviceToStart = selected;
+                else
                     activeDevice = null;
             }
         }
+        if (deviceToStart != null)
+            startHidPoller(deviceToStart, driver);
+    }
+
+    private void startHidPoller(HidDevice device, HidControllerDriver driver) {
+        var thread = new Thread(() -> {
+            var buffer = new byte[128];
+            while (device == activeDevice) {
+                try {
+                    var bytesRead = device.read(buffer, 50);
+                    if (device != activeDevice) break;
+                    if (bytesRead >= 10) {
+                        var parsed = driver.parseReport(buffer, bytesRead);
+                        if (!parsed.isEmpty()) {
+                            cachedValues = parsed;
+                            newDataPending.set(true);
+                        }
+                    }
+                } catch (Exception e) {
+                    if (device == activeDevice)
+                        logger.warn("Error reading from HID device", e);
+                    break;
+                }
+            }
+        }, "controller-hid-poller");
+        thread.setDaemon(true);
+        thread.start();
     }
 
     private void updateInputs(HidDevice device, HidControllerDriver driver) {
@@ -174,22 +208,15 @@ public class ControllerPoller {
     }
 
     private void poll() {
-        var device = activeDevice;
         var driver = activeDriver;
-        if (device == null || driver == null)
+        if (driver == null)
             return;
 
-        var buffer = new byte[128];
-        int bytesRead;
-        synchronized (deviceLock) {
-            bytesRead = device.read(buffer, 1);
-        }
-        if (bytesRead < 10)
-            return;
-
-        var values = driver.parseReport(buffer, bytesRead);
+        var values = cachedValues;
         if (values.isEmpty())
             return;
+
+        var newData = newDataPending.getAndSet(false);
 
         double pointerX = 0, pointerY = 0; var hasPointer = false;
         double panX = 0, panY = 0;         var hasPan = false;
@@ -204,32 +231,40 @@ public class ControllerPoller {
             if (mapping == null || mapping.actionType() == ControllerMapping.ActionType.NONE)
                 continue;
 
-            var lastValue = lastValues.getOrDefault(inputId, 0f);
-            lastValues.put(inputId, value);
+            var type = mapping.actionType();
 
-            if (mapping.actionType() == ControllerMapping.ActionType.CONTROLLER_TOGGLE_INPUT) {
-                handleFreezeToggle(inputId, value, lastValue);
+            if (type == ControllerMapping.ActionType.CONTROLLER_TOGGLE_INPUT) {
+                if (newData) {
+                    var lastValue = lastValues.getOrDefault(inputId, 0f);
+                    lastValues.put(inputId, value);
+                    handleFreezeToggle(inputId, value, lastValue);
+                }
                 continue;
             }
             if (inputFrozen)
                 continue;
 
-            if (mapping.actionType() == ControllerMapping.ActionType.CONTROLLER_TOGGLE_PAN_SPEED) {
-                handleFinePanToggle(inputId, value, lastValue);
-                continue;
-            }
-
-            var type = mapping.actionType();
             var touchpadSwipe = driver.isTouchpadSwipe(inputId);
 
-            if (type == ControllerMapping.ActionType.MOUSE_MOVE_X)      { pointerX += value; hasPointer = true; }
-            else if (type == ControllerMapping.ActionType.MOUSE_MOVE_Y) { pointerY += value; hasPointer = true; }
-            else if (type == ControllerMapping.ActionType.QUPATH_PAN_X && touchpadSwipe) { touchPanX += value; hasTouchPan = true; }
-            else if (type == ControllerMapping.ActionType.QUPATH_PAN_Y && touchpadSwipe) { touchPanY += value; hasTouchPan = true; }
-            else if (type == ControllerMapping.ActionType.QUPATH_PAN_X) { panX += value; hasPan = true; }
-            else if (type == ControllerMapping.ActionType.QUPATH_PAN_Y) { panY += value; hasPan = true; }
-            else if (isAnalog(inputId)) handleAnalog(mapping, value);
-            else                        handleButton(inputId, mapping, value, lastValue, driver);
+            if (type == ControllerMapping.ActionType.MOUSE_MOVE_X)                  { pointerX += value; hasPointer = true; continue; }
+            if (type == ControllerMapping.ActionType.MOUSE_MOVE_Y)                  { pointerY += value; hasPointer = true; continue; }
+            if (type == ControllerMapping.ActionType.QUPATH_PAN_X && touchpadSwipe) { touchPanX += value; hasTouchPan = true; continue; }
+            if (type == ControllerMapping.ActionType.QUPATH_PAN_Y && touchpadSwipe) { touchPanY += value; hasTouchPan = true; continue; }
+            if (type == ControllerMapping.ActionType.QUPATH_PAN_X)                  { panX += value; hasPan = true; continue; }
+            if (type == ControllerMapping.ActionType.QUPATH_PAN_Y)                  { panY += value; hasPan = true; continue; }
+
+            var lastValue = lastValues.getOrDefault(inputId, 0f);
+            lastValues.put(inputId, value);
+
+            if (type == ControllerMapping.ActionType.CONTROLLER_TOGGLE_PAN_SPEED) {
+                if (newData) handleFinePanToggle(inputId, value, lastValue);
+                continue;
+            }
+            if (isAnalog(inputId)) {
+                if (newData) handleAnalog(mapping, value);
+                continue;
+            }
+            handleButton(inputId, mapping, value, lastValue, driver);
         }
 
         var panScale = finePanMode ? 0.2 : 1.0;

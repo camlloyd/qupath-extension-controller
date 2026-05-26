@@ -3,6 +3,7 @@ package qupath.ext.controller.ui;
 import javafx.beans.property.SimpleObjectProperty;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
+import javafx.collections.transformation.FilteredList;
 import javafx.fxml.FXML;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
@@ -28,6 +29,7 @@ import qupath.lib.gui.QuPathGUI;
 import java.io.IOException;
 import java.util.List;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 public class MappingController extends TabPane {
 
@@ -75,10 +77,16 @@ public class MappingController extends TabPane {
     // ── Layout tab wiring ─────────────────────────────────────────────────────
 
     private void configureTable() {
-        table.setItems(poller.mappingStore().mappings());
+        var filtered = new FilteredList<>(poller.mappingStore().mappings());
+        table.setItems(filtered);
         table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
-        poller.inputs().addListener(
-                (javafx.collections.ListChangeListener<ControllerInput>) c -> table.refresh());
+        Runnable updateFilter = () -> {
+            var ids = poller.inputs().stream().map(ControllerInput::id).collect(Collectors.toSet());
+            filtered.setPredicate(m -> ids.contains(m.inputId()));
+            table.refresh();
+        };
+        poller.inputs().addListener((javafx.collections.ListChangeListener<ControllerInput>) c -> updateFilter.run());
+        updateFilter.run();
 
         inputColumn.setCellValueFactory(data -> {
             var id = data.getValue().inputId();
