@@ -167,8 +167,13 @@ public class MappingController extends TabPane {
         var name = profileList.getSelectionModel().getSelectedItem();
         if (name == null) return;
         if (Dialogs.showConfirmDialog("Delete profile", "Delete profile \"" + name + "\"?")) {
+            var wasActive = name.equals(profileStore.getActiveProfileName());
             profileStore.delete(name);
             profileList.getItems().setAll(profileStore.listProfiles());
+            if (wasActive) {
+                var fallback = profileStore.load("Default");
+                if (fallback != null) onProfileLoad.accept(fallback);
+            }
         }
     }
 
