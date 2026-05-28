@@ -1,26 +1,41 @@
 # QuPath Controller Extension
 
-**A [QuPath](https://github.com/qupath/qupath) extension for viewing and annotating images with a game controller.**
-
-Currently supports the DualSense (PS5) controller, tested on macOS and Windows 11 over USB.
+A [QuPath](https://github.com/qupath/qupath) extension for viewing and annotating images with a game controller.
 
 ## Installation
 
 Requires **QuPath 0.7.0**.
 
-Download the latest jar from the [Releases](../../releases/latest) page and drag it onto the QuPath main window.
-
-You can also find the extensions folder via *Extensions > Manage extensions*.
+1. Open QuPath and choose *Extensions > Manage extensions*
+2. Click *Manage extension catalogs*
+3. Click *Add* and enter this URL:
+```
+https://github.com/camlloyd/qupath-camlloyd-catalog
+```
+4. Click the `+` button next to *QuPath Controller extension*
+5. Restart QuPath
 
 > On macOS, QuPath may need accessibility and input-monitoring permissions before keyboard and mouse actions work. Grant these in *System Settings > Privacy & Security*.
 
----
 
-## Default layout
+## Usage
 
-Connect your controller over USB and open *Extensions > Controller > Controller layout...*
- 
-If you connect after QuPath is already running, use the *Refresh* button in the layout window.
+Connect your controller over USB, launch QuPath, and choose *Extensions > Controller > Controller layout...*
+
+If QuPath is already running, click the *Refresh* button in the controller layout window.
+
+
+## Compatibility
+
+| Controller | macOS | Windows |
+| :---: | :---: | :---: |
+| DualSense (PS5) | ✅ | ✅ |
+| Xbox 360 | ✅ | ❌ |
+
+> USB only. Wireless is not supported or planned.
+
+
+## Default layout (DualSense)
 
 | Input | Action |
 | --- | --- |
