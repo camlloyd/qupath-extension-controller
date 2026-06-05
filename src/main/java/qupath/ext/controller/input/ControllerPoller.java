@@ -34,7 +34,7 @@ public class ControllerPoller {
     private static final long UNDO_HOLD_NANOS = TimeUnit.SECONDS.toNanos(1);
     private static final long UNDO_RUMBLE_DELAY_NANOS = TimeUnit.MILLISECONDS.toNanos(400);
 
-    private final List<HidControllerDriver> drivers = List.of(new DualSenseDriver(), new Xbox360Driver());
+    private final List<HidControllerDriver> drivers = List.of(new DualSenseDriver(), new Xbox360Driver(), new SpaceMouseDriver());
     private final MappingStore mappingStore;
     private final InputActionExecutor executor;
     private final ObservableList<ControllerInput> inputs = FXCollections.observableArrayList();
@@ -46,6 +46,9 @@ public class ControllerPoller {
     private final Map<String, Long> holdStartNanos = new HashMap<>();
     private final Set<String> holdFired = new HashSet<>();
     private final Set<String> rumbleFired = new HashSet<>();
+    private Set<String> analogInputIds = Set.of();
+    private static final long RECONNECT_COOLDOWN_NANOS = TimeUnit.SECONDS.toNanos(5);
+    private volatile long lastReconnectNanos = 0;
     private final Object deviceLock = new Object();
     private volatile boolean inputFrozen;
     private volatile boolean finePanMode;
@@ -164,11 +167,18 @@ public class ControllerPoller {
     private void startHidPoller(HidDevice device, HidControllerDriver driver) {
         var thread = new Thread(() -> {
             var buffer = new byte[128];
+            var errorExit = false;
             while (device == activeDevice) {
                 try {
                     var bytesRead = device.read(buffer, 50);
                     if (device != activeDevice) break;
-                    if (bytesRead >= 10) {
+                    if (bytesRead < 0) {
+                        // Negative return signals a device error (e.g. cable pulled or driver conflict).
+                        logger.warn("HID read error on {}: {}", device.getProduct(), device.getLastErrorMessage());
+                        errorExit = true;
+                        break;
+                    }
+                    if (bytesRead >= driver.minReportLength()) {
                         var parsed = driver.parseReport(buffer, bytesRead);
                         if (!parsed.isEmpty()) {
                             cachedValues = parsed;
@@ -176,9 +186,21 @@ public class ControllerPoller {
                         }
                     }
                 } catch (Exception e) {
-                    if (device == activeDevice)
+                    if (device == activeDevice) {
                         logger.warn("Error reading from HID device", e);
+                        errorExit = true;
+                    }
                     break;
+                }
+            }
+            if (errorExit && device == activeDevice) {
+                var now = System.nanoTime();
+                if (now - lastReconnectNanos >= RECONNECT_COOLDOWN_NANOS) {
+                    lastReconnectNanos = now;
+                    logger.info("Scheduling controller reconnect after device error");
+                    javafx.application.Platform.runLater(this::refreshControllers);
+                } else {
+                    logger.info("Suppressing reconnect attempt (cooldown active)");
                 }
             }
         }, "controller-hid-poller");
@@ -192,6 +214,10 @@ public class ControllerPoller {
             discovered.addAll(driver.inputs());
         Platform.runLater(() -> {
             inputs.setAll(discovered);
+            analogInputIds = discovered.stream()
+                    .filter(ControllerInput::analog)
+                    .map(ControllerInput::id)
+                    .collect(java.util.stream.Collectors.toUnmodifiableSet());
             for (var input : discovered)
                 mappingStore.ensureInput(input.id(), input.displayName());
         });
@@ -274,7 +300,7 @@ public class ControllerPoller {
     }
 
     private boolean isAnalog(String inputId) {
-        return inputId.endsWith("_x") || inputId.endsWith("_y") || inputId.endsWith("_axis");
+        return analogInputIds.contains(inputId);
     }
 
     private void handleAnalog(ControllerMapping mapping, float value) {

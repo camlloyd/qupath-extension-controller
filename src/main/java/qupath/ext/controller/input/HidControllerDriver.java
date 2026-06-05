@@ -52,6 +52,13 @@ public interface HidControllerDriver {
      */
     default boolean isTouchpadSwipe(String inputId) { return false; }
 
+    /**
+     * Minimum number of bytes a HID report must contain before it is passed
+     * to {@link #parseReport}.  Override this for devices that send short
+     * reports (e.g. a button-only packet of 5 bytes).
+     */
+    default int minReportLength() { return 10; }
+
     boolean setLightbarColor(HidDevice device, int r, int g, int b);
     boolean setMicMuteLed(HidDevice device, boolean muted);
     boolean setRumble(HidDevice device, int left, int right);
