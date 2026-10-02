@@ -24,6 +24,7 @@ dependencies {
 
     compileOnly("com.fasterxml.jackson.core:jackson-databind:2.20.0")
     compileOnly("io.github.qupath:qupath-gui-fx:0.7.0")
+    compileOnly("org.jfxtras:jfxtras-common:17-r1")
 
     // Bundled into the fat jar
     implementation("org.hid4java:hid4java:0.8.0")

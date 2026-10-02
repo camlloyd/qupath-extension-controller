@@ -268,7 +268,12 @@ public class ControllerPoller {
         }
 
         var panScale = finePanMode ? 0.2 : 1.0;
-        if (hasPointer)   executor.movePointer(pointerX, pointerY);
+        if (hasPointer) {
+            if (executor.isClassificationWheelOpen())
+                executor.snapClassificationWheel(pointerX, pointerY);
+            else
+                executor.movePointer(pointerX, pointerY);
+        }
         if (hasPan)       executor.panViewer(panX * panScale, panY * panScale);
         if (hasTouchPan)  executor.panTouchpad(touchPanX * panScale, touchPanY * panScale);
     }
