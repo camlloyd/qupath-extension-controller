@@ -10,7 +10,7 @@ plugins {
 qupathExtension {
     name = "qupath-extension-controller"
     group = "io.github.camlloyd"
-    version = "0.3.0"
+    version = "0.4.0-SNAPSHOT"
     description = "Map a game controller to QuPath actions and viewer controls"
     automaticModule = "io.github.camlloyd.qupath.extension.controller"
 }
