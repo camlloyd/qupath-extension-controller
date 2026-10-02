@@ -111,9 +111,9 @@ public class ControllerExtension implements QuPathExtension {
         var name = profileStore.getActiveProfileName();
         if (name == null)
             name = "Default";
-        var profile = profileStore.load(name);
-        if (profile == null) return;
-        mappingStore.applyProfileMappings(profile);
+        // Don't re-apply the profile's mappings: MappingStore already restored the layout as last
+        // edited, and re-applying would undo any change not saved back into the profile
+        if (profileStore.load(name) == null) return;
         profileStore.setActiveProfileName(name);
         var finalName = name;
         Platform.runLater(() -> {
