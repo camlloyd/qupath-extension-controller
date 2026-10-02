@@ -169,7 +169,6 @@ public class MappingStore {
                         unescape(parts[1]),
                         ControllerMapping.ActionType.valueOf(parts[2]),
                         unescape(parts[3]));
-                mapping = migrateDefaultMapping(mapping);
                 mappings.put(mapping.inputId(), mapping);
             } catch (IllegalArgumentException ignored) {
                 // Skip stale mappings from earlier versions.
@@ -247,83 +246,6 @@ public class MappingStore {
                 "xbox360.left_y|Left joystick vertical|MOUSE_MOVE_Y|",
                 "xbox360.right_x|Right joystick horizontal|QUPATH_PAN_X|",
                 "xbox360.right_y|Right joystick vertical|QUPATH_PAN_Y|");
-    }
-
-    private static ControllerMapping migrateDefaultMapping(ControllerMapping mapping) {
-        if ("dualsense.create".equals(mapping.inputId())
-                && mapping.actionType() == ControllerMapping.ActionType.QUPATH_SCREENSHOT)
-            return new ControllerMapping(mapping.inputId(), mapping.inputName(), ControllerMapping.ActionType.QUPATH_COMMAND, "File > Export snapshot... > Main window screenshot...");
-
-        if ("dualsense.touchpad_right".equals(mapping.inputId())
-                && mapping.actionType() == ControllerMapping.ActionType.QUPATH_COMMAND
-                && "View > Show slide overview".equals(mapping.actionValue()))
-            return new ControllerMapping(mapping.inputId(), mapping.inputName(), ControllerMapping.ActionType.QUPATH_SLIDE_OVERVIEW, "");
-
-        if ("dualsense.touchpad_left".equals(mapping.inputId())
-                && mapping.actionType() == ControllerMapping.ActionType.QUPATH_COMMAND
-                && "View > Show analysis pane".equals(mapping.actionValue()))
-            return new ControllerMapping(mapping.inputId(), mapping.inputName(), ControllerMapping.ActionType.QUPATH_TOGGLE_SIDEBAR, "");
-
-        if ("dualsense.cross".equals(mapping.inputId())
-                && mapping.actionType() == ControllerMapping.ActionType.KEY
-                && "space".equalsIgnoreCase(mapping.actionValue()))
-            return new ControllerMapping(mapping.inputId(), mapping.inputName(), ControllerMapping.ActionType.MOUSE_BUTTON, "Left");
-
-        if ("dualsense.circle".equals(mapping.inputId())
-                && mapping.actionType() == ControllerMapping.ActionType.NONE)
-            return new ControllerMapping(mapping.inputId(), mapping.inputName(), ControllerMapping.ActionType.QUPATH_UNDO, "");
-
-        if ("dualsense.square".equals(mapping.inputId())
-                && mapping.actionType() == ControllerMapping.ActionType.NONE)
-            return new ControllerMapping(mapping.inputId(), mapping.inputName(), ControllerMapping.ActionType.MOUSE_BUTTON, "Right");
-
-        if ("dualsense.triangle".equals(mapping.inputId())
-                && mapping.actionType() == ControllerMapping.ActionType.KEY
-                && "shift".equalsIgnoreCase(mapping.actionValue()))
-            return new ControllerMapping(mapping.inputId(), mapping.inputName(), ControllerMapping.ActionType.MOUSE_SHIFT_RIGHT_CLICK, "");
-
-        if ("dualsense.r3".equals(mapping.inputId())
-                && (mapping.actionType() == ControllerMapping.ActionType.NONE
-                || mapping.actionType() == ControllerMapping.ActionType.QUPATH_ZOOM_TO_FIT))
-            return new ControllerMapping(mapping.inputId(), mapping.inputName(), ControllerMapping.ActionType.QUPATH_COMMAND, "View > Zoom > Zoom to fit");
-
-        if ("dualsense.options".equals(mapping.inputId())
-                && (mapping.actionType() == ControllerMapping.ActionType.NONE
-                || mapping.actionType() == ControllerMapping.ActionType.QUPATH_SAVE_AS))
-            return new ControllerMapping(mapping.inputId(), mapping.inputName(), ControllerMapping.ActionType.QUPATH_COMMAND, "File > Save As...");
-
-        if ("dualsense.touchpad_bottom".equals(mapping.inputId())
-                && mapping.actionType() == ControllerMapping.ActionType.QUPATH_DETECTION_MEASUREMENTS)
-            return new ControllerMapping(mapping.inputId(), mapping.inputName(), ControllerMapping.ActionType.QUPATH_COMMAND, "Measure > Show detection measurements");
-
-        if ("dualsense.mic_mute".equals(mapping.inputId())
-                && mapping.actionType() == ControllerMapping.ActionType.NONE)
-            return new ControllerMapping(mapping.inputId(), mapping.inputName(), ControllerMapping.ActionType.CONTROLLER_TOGGLE_INPUT, "");
-
-        if ("dualsense.touchpad_right".equals(mapping.inputId())
-                && mapping.actionType() == ControllerMapping.ActionType.NONE)
-            return new ControllerMapping(mapping.inputId(), mapping.inputName(), ControllerMapping.ActionType.QUPATH_SLIDE_OVERVIEW, "");
-
-        if ("dualsense.l1".equals(mapping.inputId())
-                && mapping.actionType() == ControllerMapping.ActionType.MOUSE_WHEEL
-                && "down".equalsIgnoreCase(mapping.actionValue()))
-            return new ControllerMapping(mapping.inputId(), mapping.inputName(), ControllerMapping.ActionType.QUPATH_ZOOM_OUT, "");
-
-        if ("dualsense.r1".equals(mapping.inputId())
-                && mapping.actionType() == ControllerMapping.ActionType.MOUSE_WHEEL
-                && "up".equalsIgnoreCase(mapping.actionValue()))
-            return new ControllerMapping(mapping.inputId(), mapping.inputName(), ControllerMapping.ActionType.QUPATH_ZOOM_IN, "");
-
-        if ("dualsense.l2".equals(mapping.inputId())
-                && mapping.actionType() == ControllerMapping.ActionType.NONE)
-            return new ControllerMapping(mapping.inputId(), mapping.inputName(), ControllerMapping.ActionType.QUPATH_TOOL_PREVIOUS, "");
-
-        if ("dualsense.r2".equals(mapping.inputId())
-                && (mapping.actionType() == ControllerMapping.ActionType.NONE
-                || mapping.actionType() == ControllerMapping.ActionType.KEY))
-            return new ControllerMapping(mapping.inputId(), mapping.inputName(), ControllerMapping.ActionType.QUPATH_TOOL_NEXT, "");
-
-        return mapping;
     }
 
     private void addDefaultMappingsIfMissing() {
