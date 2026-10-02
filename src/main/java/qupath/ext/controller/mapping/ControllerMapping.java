@@ -37,13 +37,9 @@ public record ControllerMapping(String inputId, String inputName, ActionType act
         QUPATH_COMMAND("QuPath command..."),
         // Hidden from dropdown — achievable via QuPath command...
         QUPATH_CLOSE_DIALOG("QuPath close dialog *"),
-        QUPATH_SAVE_AS("QuPath save as"),
-        QUPATH_SCREENSHOT("QuPath screenshot"),
         QUPATH_SLIDE_OVERVIEW("QuPath slide overview *"),
         QUPATH_TOGGLE_SIDEBAR("QuPath show analysis pane *"),
-        QUPATH_ZOOM_TO_FIT("QuPath zoom to fit"),
-        QUPATH_COMMAND_LIST("QuPath command list"),
-        QUPATH_DETECTION_MEASUREMENTS("QuPath detection measurements");
+        QUPATH_COMMAND_LIST("QuPath command list");
 
         private final String label;
 

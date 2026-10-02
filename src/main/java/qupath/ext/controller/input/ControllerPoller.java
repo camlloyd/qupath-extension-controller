@@ -227,8 +227,6 @@ public class ControllerPoller {
             var value = entry.getValue();
             var mapping = mappingStore.getMapping(inputId);
             if (mapping == null || mapping.actionType() == ControllerMapping.ActionType.NONE)
-                mapping = driver.builtInMapping(inputId);
-            if (mapping == null || mapping.actionType() == ControllerMapping.ActionType.NONE)
                 continue;
 
             var type = mapping.actionType();

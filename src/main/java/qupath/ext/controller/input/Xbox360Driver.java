@@ -1,7 +1,6 @@
 package qupath.ext.controller.input;
 
 import org.hid4java.HidDevice;
-import qupath.ext.controller.mapping.ControllerMapping;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -110,36 +109,6 @@ public class Xbox360Driver implements HidControllerDriver {
     }
 
     @Override
-    public ControllerMapping builtInMapping(String inputId) {
-        return switch (inputId) {
-            case "xbox360.left_x"  -> mapping(inputId, "Left joystick horizontal",  ControllerMapping.ActionType.MOUSE_MOVE_X, "");
-            case "xbox360.left_y"  -> mapping(inputId, "Left joystick vertical",    ControllerMapping.ActionType.MOUSE_MOVE_Y, "");
-            case "xbox360.right_x" -> mapping(inputId, "Right joystick horizontal", ControllerMapping.ActionType.QUPATH_PAN_X, "");
-            case "xbox360.right_y" -> mapping(inputId, "Right joystick vertical",   ControllerMapping.ActionType.QUPATH_PAN_Y, "");
-            case "xbox360.a"    -> mapping(inputId, "A button", ControllerMapping.ActionType.MOUSE_BUTTON, "Left");
-            case "xbox360.b"    -> mapping(inputId, "B button", ControllerMapping.ActionType.QUPATH_UNDO, "");
-            case "xbox360.x"    -> mapping(inputId, "X button", ControllerMapping.ActionType.MOUSE_BUTTON, "Right");
-            case "xbox360.y"    -> mapping(inputId, "Y button", ControllerMapping.ActionType.MOUSE_SHIFT_RIGHT_CLICK, "");
-            case "xbox360.ls"   -> mapping(inputId, "Left stick click (LS)",  ControllerMapping.ActionType.QUPATH_COMMAND, "View > Zoom > Zoom to fit");
-            case "xbox360.rs"   -> mapping(inputId, "Right stick click (RS)", ControllerMapping.ActionType.CONTROLLER_TOGGLE_PAN_SPEED, "");
-            case "xbox360.back" -> mapping(inputId, "Back button", ControllerMapping.ActionType.QUPATH_COMMAND, "File > Export snapshot... > Main window screenshot...");
-            case "xbox360.start" -> mapping(inputId, "Start button", ControllerMapping.ActionType.QUPATH_COMMAND, "File > Save As...");
-            case "xbox360.lb"   -> mapping(inputId, "Left bumper (LB)",   ControllerMapping.ActionType.QUPATH_TOOL_PREVIOUS, "");
-            case "xbox360.rb"   -> mapping(inputId, "Right bumper (RB)",  ControllerMapping.ActionType.QUPATH_TOOL_NEXT, "");
-            case "xbox360.lt"   -> mapping(inputId, "Left trigger (LT)",  ControllerMapping.ActionType.QUPATH_ZOOM_OUT, "");
-            case "xbox360.rt"   -> mapping(inputId, "Right trigger (RT)", ControllerMapping.ActionType.QUPATH_ZOOM_IN, "");
-            case "xbox360.lt_axis"    -> mapping(inputId, "LT trigger analog", ControllerMapping.ActionType.NONE, "");
-            case "xbox360.rt_axis"    -> mapping(inputId, "RT trigger analog", ControllerMapping.ActionType.NONE, "");
-            case "xbox360.dpad_up"    -> mapping(inputId, "D-pad up",    ControllerMapping.ActionType.QUPATH_SHOW_ANNOTATIONS, "");
-            case "xbox360.dpad_down"  -> mapping(inputId, "D-pad down",  ControllerMapping.ActionType.QUPATH_FILL_ANNOTATIONS, "");
-            case "xbox360.dpad_left"  -> mapping(inputId, "D-pad left",  ControllerMapping.ActionType.QUPATH_SHOW_DETECTIONS, "");
-            case "xbox360.dpad_right" -> mapping(inputId, "D-pad right", ControllerMapping.ActionType.QUPATH_FILL_DETECTIONS, "");
-            case "xbox360.guide"      -> mapping(inputId, "Guide button", ControllerMapping.ActionType.CONTROLLER_TOGGLE_INPUT, "");
-            default -> null;
-        };
-    }
-
-    @Override
     public boolean isTriggerRepeat(String inputId) {
         return "xbox360.lb".equals(inputId) || "xbox360.rb".equals(inputId);
     }
@@ -167,11 +136,6 @@ public class Xbox360Driver implements HidControllerDriver {
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
-
-    private static ControllerMapping mapping(String id, String name,
-                                              ControllerMapping.ActionType type, String value) {
-        return new ControllerMapping(id, name, type, value);
-    }
 
     private static void addStick(Map<String, Float> values, String prefix, float x, float y) {
         var magnitude = Math.sqrt(x * x + y * y);
