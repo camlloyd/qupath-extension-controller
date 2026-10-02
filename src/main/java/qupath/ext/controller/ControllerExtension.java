@@ -32,7 +32,7 @@ import java.awt.image.BufferedImage;
 import java.util.Collection;
 
 /**
- * QuPath extension that maps DualSense HID events to keyboard and mouse input.
+ * QuPath extension that maps game controller HID input to QuPath actions, keyboard and mouse input.
  */
 public class ControllerExtension implements QuPathExtension {
 
