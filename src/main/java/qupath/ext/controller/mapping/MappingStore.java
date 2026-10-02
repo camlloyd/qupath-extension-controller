@@ -139,6 +139,8 @@ public class MappingStore {
             mappings.clear();
             for (var pm : profile.mappings())
                 mappings.put(pm.inputId(), pm.toControllerMapping());
+            // Profiles saved before an input existed (e.g. Xbox support) get its default
+            addDefaultMappingsIfMissing();
             notifyObservers();
             save();
         } finally {

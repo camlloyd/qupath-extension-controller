@@ -1,7 +1,6 @@
 package qupath.ext.controller.input;
 
 import org.hid4java.HidDevice;
-import qupath.ext.controller.mapping.ControllerMapping;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -139,36 +138,6 @@ public class DualSenseDriver implements HidControllerDriver {
     }
 
     @Override
-    public ControllerMapping builtInMapping(String inputId) {
-        return switch (inputId) {
-            case "dualsense.left_x"  -> mapping(inputId, "Left joystick horizontal",  ControllerMapping.ActionType.MOUSE_MOVE_X, "");
-            case "dualsense.left_y"  -> mapping(inputId, "Left joystick vertical",    ControllerMapping.ActionType.MOUSE_MOVE_Y, "");
-            case "dualsense.right_x" -> mapping(inputId, "Right joystick horizontal", ControllerMapping.ActionType.QUPATH_PAN_X, "");
-            case "dualsense.right_y" -> mapping(inputId, "Right joystick vertical",   ControllerMapping.ActionType.QUPATH_PAN_Y, "");
-            case "dualsense.touchpad_swipe_x" -> mapping(inputId, "Touch pad swipe horizontal", ControllerMapping.ActionType.QUPATH_PAN_X, "");
-            case "dualsense.touchpad_swipe_y" -> mapping(inputId, "Touch pad swipe vertical",   ControllerMapping.ActionType.QUPATH_PAN_Y, "");
-            case "dualsense.cross"   -> mapping(inputId, "Cross button", ControllerMapping.ActionType.MOUSE_BUTTON, "Left");
-            case "dualsense.circle"  -> mapping(inputId, "Circle button",    ControllerMapping.ActionType.QUPATH_UNDO, "");
-            case "dualsense.square"  -> mapping(inputId, "Square button",    ControllerMapping.ActionType.MOUSE_BUTTON, "Right");
-            case "dualsense.triangle" -> mapping(inputId, "Triangle button", ControllerMapping.ActionType.MOUSE_SHIFT_RIGHT_CLICK, "");
-            case "dualsense.l3"      -> mapping(inputId, "Left stick click (L3)",  ControllerMapping.ActionType.QUPATH_COMMAND, "View > Zoom > Zoom to fit");
-            case "dualsense.r3"      -> mapping(inputId, "Right stick click (R3)", ControllerMapping.ActionType.CONTROLLER_TOGGLE_PAN_SPEED, "");
-            case "dualsense.create"  -> mapping(inputId, "Create button",          ControllerMapping.ActionType.QUPATH_COMMAND, "File > Export snapshot... > Main window screenshot...");
-            case "dualsense.options" -> mapping(inputId, "Options button",         ControllerMapping.ActionType.QUPATH_COMMAND, "File > Save As...");
-            case "dualsense.l2"      -> mapping(inputId, "Left trigger (L2)",      ControllerMapping.ActionType.QUPATH_TOOL_PREVIOUS, "");
-            case "dualsense.r2"      -> mapping(inputId, "Right trigger (R2)",     ControllerMapping.ActionType.QUPATH_TOOL_NEXT, "");
-            case "dualsense.mic_mute"       -> mapping(inputId, "Mute button",           ControllerMapping.ActionType.CONTROLLER_TOGGLE_INPUT, "");
-            case "dualsense.touchpad_left"  -> mapping(inputId, "Touch pad left press", ControllerMapping.ActionType.QUPATH_TOGGLE_SIDEBAR, "");
-            case "dualsense.touchpad_right" -> mapping(inputId, "Touch pad right press",ControllerMapping.ActionType.QUPATH_SLIDE_OVERVIEW, "");
-            case "dualsense.dpad_up"    -> mapping(inputId, "D-pad up",    ControllerMapping.ActionType.KEY, "UP");
-            case "dualsense.dpad_down"  -> mapping(inputId, "D-pad down",  ControllerMapping.ActionType.KEY, "DOWN");
-            case "dualsense.dpad_left"  -> mapping(inputId, "D-pad left",  ControllerMapping.ActionType.KEY, "LEFT");
-            case "dualsense.dpad_right" -> mapping(inputId, "D-pad right", ControllerMapping.ActionType.KEY, "RIGHT");
-            default -> null;
-        };
-    }
-
-    @Override
     public boolean isTriggerRepeat(String inputId) {
         return "dualsense.l2".equals(inputId) || "dualsense.r2".equals(inputId);
     }
@@ -200,11 +169,6 @@ public class DualSenseDriver implements HidControllerDriver {
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
-
-    private static ControllerMapping mapping(String id, String name,
-                                              ControllerMapping.ActionType type, String value) {
-        return new ControllerMapping(id, name, type, value);
-    }
 
     private void addTouchpadSwipe(Map<String, Float> values, byte[] report,
                                    int offset, int length, boolean pressed) {

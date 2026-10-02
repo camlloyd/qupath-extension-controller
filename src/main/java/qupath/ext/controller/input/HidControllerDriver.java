@@ -1,7 +1,6 @@
 package qupath.ext.controller.input;
 
 import org.hid4java.HidDevice;
-import qupath.ext.controller.mapping.ControllerMapping;
 
 import java.util.List;
 import java.util.Map;
@@ -32,12 +31,6 @@ public interface HidControllerDriver {
      * Returns an empty map if the report is unrecognised or too short.
      */
     Map<String, Float> parseReport(byte[] report, int length);
-
-    /**
-     * Runtime fallback mapping used when the user has not configured an input.
-     * Returns null if there is no built-in default for this input.
-     */
-    ControllerMapping builtInMapping(String inputId);
 
     /**
      * Return true if this input ID should use trigger-repeat behaviour
