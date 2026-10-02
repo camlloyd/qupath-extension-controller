@@ -2,10 +2,13 @@ package qupath.ext.controller.input;
 
 import javafx.application.Platform;
 import javafx.beans.property.DoubleProperty;
+import javafx.collections.ListChangeListener;
 import javafx.scene.input.KeyCode;
+import javafx.stage.Popup;
 import javafx.stage.Stage;
 import javafx.stage.Window;
 import javafx.stage.WindowEvent;
+import jfxtras.scene.layout.CircularPane;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.controller.mapping.ControllerMapping;
@@ -16,6 +19,7 @@ import java.awt.MouseInfo;
 import java.awt.Robot;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -36,6 +40,11 @@ public class InputActionExecutor {
     private double fractionalPanX;
     private double fractionalPanY;
     private int lastToolIndex = -1;
+    private volatile List<double[]> classificationWheelSnapTargets = List.of();
+    private volatile Popup activeClassificationWheelPopup;
+    private volatile CircularPane activeClassificationWheelPane;
+    private double[] lastClassificationWheelTarget;
+    private ListChangeListener<Window> classificationWheelWatcher;
 
     public InputActionExecutor(
             QuPathGUI qupath,
@@ -168,10 +177,95 @@ public class InputActionExecutor {
 
     private void pressShiftRightClick() {
         focusQuPathStage();
+        // Install watcher before firing robot events so we catch the popup the instant it appears
+        Platform.runLater(this::installClassificationWheelWatcher);
         robot.keyPress(KeyEvent.VK_SHIFT);
         robot.mousePress(InputEvent.BUTTON3_DOWN_MASK);
         robot.mouseRelease(InputEvent.BUTTON3_DOWN_MASK);
         robot.keyRelease(KeyEvent.VK_SHIFT);
+    }
+
+    private void installClassificationWheelWatcher() {
+        var windows = Window.getWindows();
+        if (classificationWheelWatcher != null)
+            windows.removeListener(classificationWheelWatcher);
+        classificationWheelWatcher = change -> {
+            while (change.next()) {
+                for (var window : change.getAddedSubList()) {
+                    if (!(window instanceof Popup popup)) continue;
+                    if (popup.getContent().isEmpty()) continue;
+                    if (!(popup.getContent().get(0) instanceof CircularPane pane)) continue;
+                    windows.removeListener(classificationWheelWatcher);
+                    classificationWheelWatcher = null;
+                    activeClassificationWheelPopup = popup;
+                    activeClassificationWheelPane = pane;
+                    classificationWheelSnapTargets = List.of();
+                    pane.setOnAnimateInFinished(e -> {
+                        if (popup.isShowing())
+                            collectClassificationWheelSnapTargets(pane);
+                    });
+                    return;
+                }
+            }
+        };
+        windows.addListener(classificationWheelWatcher);
+    }
+
+    private void collectClassificationWheelSnapTargets(CircularPane pane) {
+        var center = pane.localToScreen(pane.getLayoutBounds());
+        if (center == null)
+            return;
+        var targets = new ArrayList<double[]>();
+        for (var child : pane.getChildren()) {
+            var bounds = child.localToScreen(child.getBoundsInLocal());
+            if (bounds != null) {
+                // Screen angle of each item from the wheel centre (y down, so clockwise), matched against the stick angle
+                var angle = Math.atan2(bounds.getCenterY() - center.getCenterY(), bounds.getCenterX() - center.getCenterX());
+                targets.add(new double[]{bounds.getCenterX(), bounds.getCenterY(), angle});
+            }
+        }
+        classificationWheelSnapTargets = List.copyOf(targets);
+    }
+
+    public boolean isClassificationWheelOpen() {
+        var p = activeClassificationWheelPopup;
+        // Dismissing the wheel animates it out before the popup hides, so stop snapping as soon as that starts
+        if (p == null || !p.isShowing() || activeClassificationWheelPane.isAnimatingOut()) {
+            classificationWheelSnapTargets = List.of();
+            return false;
+        }
+        return !classificationWheelSnapTargets.isEmpty();
+    }
+
+    public void snapClassificationWheel(double stickX, double stickY) {
+        if (robot == null) return;
+        var targets = classificationWheelSnapTargets;
+        if (targets.isEmpty()) return;
+        if (Math.sqrt(stickX * stickX + stickY * stickY) < 0.15) return;
+
+        var stickAngle = Math.atan2(stickY, stickX);
+        double[] target = null;
+        var bestDiff = Double.MAX_VALUE;
+        for (var candidate : targets) {
+            var diff = angleDiff(candidate[2], stickAngle);
+            if (diff < bestDiff) {
+                bestDiff = diff;
+                target = candidate;
+            }
+        }
+        // Items can sit anywhere on the wheel (depends on the class list), so a stick held between two
+        // would flicker; stay on the current item until another is closer by a quarter of the item spacing
+        var hysteresis = Math.PI / (2 * targets.size());
+        var last = lastClassificationWheelTarget;
+        if (last != null && target != last && targets.contains(last)
+                && angleDiff(last[2], stickAngle) - bestDiff < hysteresis)
+            target = last;
+        lastClassificationWheelTarget = target;
+        robot.mouseMove((int) target[0], (int) target[1]);
+    }
+
+    private static double angleDiff(double a, double b) {
+        return Math.abs(Math.IEEEremainder(a - b, 2 * Math.PI));
     }
 
 
